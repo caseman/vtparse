@@ -15,8 +15,10 @@ void vtparse_init(vtparse_t *parser, vtparse_callback_t cb)
     parser->num_params             = 0;
     parser->ignore_flagged         = 0;
     parser->cb                     = cb;
-    parser->characterBytes         = 1;
-    parser->utf8Character          = 0;
+    parser->ch_bytes               = 1;
+    parser->utf8_ch                = 0;
+    parser->print_buf_len          = 0;
+    parser->print_buf[0]           = 0;
 }
 
 static void do_action(vtparse_t *parser, vtparse_action_t action, unsigned int ch)
@@ -82,8 +84,8 @@ static void do_action(vtparse_t *parser, vtparse_action_t action, unsigned int c
 
         case VTPARSE_ACTION_CLEAR:
             parser->num_intermediate_chars = 0;
-            parser->num_params            = 0;
-            parser->ignore_flagged        = 0;
+            parser->num_params = 0;
+            parser->ignore_flagged = 0;
             break;
 
         default:
@@ -98,9 +100,9 @@ static void do_state_change(vtparse_t *parser, state_change_t change, unsigned i
     vtparse_state_t  new_state = STATE(change);
     vtparse_action_t action    = ACTION(change);
 
-
     if(new_state)
     {
+        // printf("change %d new state! %d\n", change, new_state);
         /* Perform up to three actions:
          *   1. the exit action of the old state
          *   2. the action associated with the transition
@@ -127,22 +129,27 @@ static void do_state_change(vtparse_t *parser, state_change_t change, unsigned i
     }
 }
 
+static void do_print(vtparse_t *parser) 
+{
+    parser->print_buf[parser->print_buf_len] = 0;
+    parser->num_intermediate_chars = 0;
+    parser->num_params = 0;
+    parser->ignore_flagged = 0;
+    do_state_change(parser, VTPARSE_ACTION_PRINT, 0);
+    parser->print_buf_len = 0;
+}
+
 void vtparse(vtparse_t *parser, unsigned char *data, unsigned int len)
 {
     int i;
     for(i = 0; i < len; i++)
     {
         unsigned char ch = data[i];
-        if(parser->characterBytes != 1)
+        if(parser->ch_bytes != 1)
         {
-            parser->utf8Character = (parser->utf8Character << 6) | (ch & 0x3F);
-            parser->characterBytes--;
-
-            if(parser->characterBytes == 1)
-            {
-                state_change_t change = VTPARSE_ACTION_PRINT;
-                do_state_change(parser, change, parser->utf8Character);
-            }
+            ch = parser->utf8_ch = (parser->utf8_ch << 6) | (ch & 0x3F);
+            parser->ch_bytes--;
+            if(parser->ch_bytes != 1) continue;
         }
         else if((ch&(1<<7)) != 0)
         {
@@ -154,34 +161,48 @@ void vtparse(vtparse_t *parser, unsigned char *data, unsigned int len)
                     break;
                 }
                 bit--;
-            }while(bit > 1);
+            } while(bit > 1);
 
-            parser->utf8Character = 0;
-            parser->characterBytes = 7-bit;
-            switch(parser->characterBytes)
+            parser->utf8_ch = 0;
+            parser->ch_bytes = 7-bit;
+            switch(parser->ch_bytes)
             {
                 case 2:
-                    parser->utf8Character = ch & (1 | (1<<1) | (1<<2) | (1<<3) | (1<<4));
+                    parser->utf8_ch = ch & (1 | (1<<1) | (1<<2) | (1<<3) | (1<<4));
                     break;
                 case 3:
-                    parser->utf8Character = ch & (1 | (1<<1) | (1<<2) | (1<<3));
+                    parser->utf8_ch = ch & (1 | (1<<1) | (1<<2) | (1<<3));
                     break;
                 case 4:
-                    parser->utf8Character = ch & (1 | (1<<1) | (1<<2));
+                    parser->utf8_ch = ch & (1 | (1<<1) | (1<<2));
                     break;
                 case 5:
-                    parser->utf8Character = ch & (1 | (1<<1));
+                    parser->utf8_ch = ch & (1 | (1<<1));
                     break;
                 case 6:
-                    parser->utf8Character = ch & 1;
+                    parser->utf8_ch = ch & 1;
                     break;
             }
+            continue;
         }
-        else
+        if(parser->state == VTPARSE_STATE_GROUND && ch >= 0x20) {
+            parser->print_buf[parser->print_buf_len++] = ch;
+            if(parser->print_buf_len >= (PRINT_BUFFER_SIZE-1))
+            {
+                do_print(parser);
+            }
+            continue;
+        }
+        if(parser->print_buf_len)
         {
-            state_change_t change = STATE_TABLE[parser->state-1][ch];
-            do_state_change(parser, change, (unsigned int)ch);
+            do_print(parser);
         }
+        state_change_t change = STATE_TABLE[parser->state-1][ch];
+        do_state_change(parser, change, (unsigned int)ch);
+    }
+    if(parser->print_buf_len)
+    {
+        do_print(parser);
     }
 }
 

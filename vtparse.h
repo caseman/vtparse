@@ -16,6 +16,7 @@ extern "C" {
 #include "vtparse_table.h"
 
 #define MAX_INTERMEDIATE_CHARS 2
+#define PRINT_BUFFER_SIZE 256
 #define ACTION(state_change) (state_change & 0x0F)
 #define STATE(state_change)  (state_change >> 4)
 
@@ -32,8 +33,10 @@ typedef struct vtparse {
     int                params[16];
     int                num_params;
     void*              user_data;
-    int                characterBytes;
-    unsigned int       utf8Character;
+    int                ch_bytes;
+    unsigned int       utf8_ch;
+    unsigned int       print_buf_len;
+    unsigned int       print_buf[PRINT_BUFFER_SIZE];
 } vtparse_t;
 
 void vtparse_init(vtparse_t *parser, vtparse_callback_t cb);

@@ -7,6 +7,7 @@
  */
 
 #include <stdio.h>
+#include <wchar.h>
 #include <unistd.h>
 #include "vtparse.h"
 
@@ -32,6 +33,9 @@ void parser_callback(vtparse_t *parser, vtparse_action_t action, unsigned int ch
             } else {
                 printf("%d", parser->params[i]);
             }
+    }
+    if(action == VTPARSE_ACTION_PRINT) {
+        wprintf(L"\"%ls\"", parser->print_buf);
     }
 
     printf("\n");
