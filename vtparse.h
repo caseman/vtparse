@@ -41,6 +41,7 @@ typedef struct vtparse {
 
 void vtparse_init(vtparse_t *parser, vtparse_callback_t cb);
 void vtparse(vtparse_t *parser, unsigned char *data, unsigned int len);
+void vtparsew(vtparse_t *parser, unsigned int *data, unsigned int len);
 
 #ifdef __cplusplus
 }

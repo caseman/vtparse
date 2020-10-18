@@ -139,6 +139,24 @@ static void do_print(vtparse_t *parser)
     parser->print_buf_len = 0;
 }
 
+static void parse_ch(vtparse_t *parser, unsigned int ch)
+{
+    if(parser->state == VTPARSE_STATE_GROUND && ch >= 0x20) {
+        parser->print_buf[parser->print_buf_len++] = ch;
+        if(parser->print_buf_len >= (PRINT_BUFFER_SIZE-1))
+        {
+            do_print(parser);
+        }
+        return;
+    }
+    if(parser->print_buf_len)
+    {
+        do_print(parser);
+    }
+    state_change_t change = STATE_TABLE[parser->state-1][ch];
+    do_state_change(parser, change, (unsigned int)ch);
+}
+
 void vtparse(vtparse_t *parser, unsigned char *data, unsigned int len)
 {
     int i;
@@ -185,20 +203,7 @@ void vtparse(vtparse_t *parser, unsigned char *data, unsigned int len)
             }
             continue;
         }
-        if(parser->state == VTPARSE_STATE_GROUND && ch >= 0x20) {
-            parser->print_buf[parser->print_buf_len++] = ch;
-            if(parser->print_buf_len >= (PRINT_BUFFER_SIZE-1))
-            {
-                do_print(parser);
-            }
-            continue;
-        }
-        if(parser->print_buf_len)
-        {
-            do_print(parser);
-        }
-        state_change_t change = STATE_TABLE[parser->state-1][ch];
-        do_state_change(parser, change, (unsigned int)ch);
+        parse_ch(parser, ch);
     }
     if(parser->print_buf_len)
     {
@@ -206,3 +211,15 @@ void vtparse(vtparse_t *parser, unsigned char *data, unsigned int len)
     }
 }
 
+void vtparsew(vtparse_t *parser, unsigned int *data, unsigned int len)
+{
+    int i;
+    for(i = 0; i < len; i++)
+    {
+        parse_ch(parser, data[i]);
+    }
+    if(parser->print_buf_len)
+    {
+        do_print(parser);
+    }
+}
